@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crash Data Analysis by Operator</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .bar {
+            fill: steelblue;
+        }
+
+        .bar:hover {
+            fill: orange;
+        }
+
+        .axis-x text {
+            font-size: 12px;
+            fill: black;
+        }
+
+        .axis-y text {
+            font-size: 12px;
+            fill: black;
+        }
+
+        .sidebar {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        h2{
+            text-align: center;
+        }
+        .chart{
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2em;
+            padding: 1em;
+        }
+    </style>
+</head>
+<body >
+    <div class="container-fluid">
+        <div class="row">
+            <h2 class=" m-5 mx-auto">Crash Data Analysis by Operator</h2>
+            <div class="col-md-9 m-2 mx-auto">
+                <div class="sidebar">
+                    <h2></h2>
+                    <div class="form-group">
+                        <label for="numOperators">Slide to select number of operators:</label>
+                        <input type="range" class="form-control-range" id="numOperators" min="5" max="50">
+                    </div>
+                    <div class="form-group" style="display: none;">
+                        <label for="order">Order By:</label>
+                        <select class="form-control" id="order">
+                            <option value="desc">Descending</option>
+                            <option value="asc">Ascending</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-12 mx-auto">
+              
+                <div class=" chart mx-auto" id="chart"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Define the SVG dimensions and margins
+        const margin = { top: 20, right: 20, bottom: 170, left: 40 };
+        const width = 1300 - margin.left - margin.right;
+        const height = 600 - margin.top - margin.bottom;
+
+        // Append the SVG object to the chart div
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        // Read the data from CSV
+        d3.csv("Airplane_Crashes_and_Fatalities.csv").then(function(data) {
+            // Function to update chart based on selected number of operators and order
+            function updateChart(numOperators, order) {
+                const operatorCounts = d3.rollup(data, v => v.length, d => d.Operator);
+                let operatorData = Array.from(operatorCounts, ([operator, count]) => ({ operator, count }));
+                if (order === "asc") {
+                    operatorData.sort((a, b) => a.count - b.count);
+                } else {
+                    operatorData.sort((a, b) => b.count - a.count);
+                }
+                operatorData = operatorData.slice(0, numOperators);
+
+                const x = d3.scaleBand()
+                    .domain(operatorData.map(d => d.operator))
+                    .range([0, width])
+                    .padding(0.1);
+
+                const y = d3.scaleLinear()
+                    .domain([0, d3.max(operatorData, d => d.count)])
+                    .nice()
+                    .range([height, 0]);
+
+                svg.selectAll(".bar").remove();
+
+                svg.selectAll(".bar")
+                    .data(operatorData)
+                    .enter()
+                    .append("rect")
+                    .attr("class", "bar")
+                    .attr("x", d => x(d.operator))
+                    .attr("width", x.bandwidth())
+                    .attr("y", d => y(d.count))
+                    .attr("height", d => height - y(d.count));
+
+                svg.select(".axis-x").remove();
+                svg.select(".axis-y").remove();
+
+                svg.append("g")
+                    .attr("class", "axis-x")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(d3.axisBottom(x))
+                    .selectAll("text")
+                    .style("text-anchor", "end")
+                    .attr("dx", "-.8em")
+                    .attr("dy", ".15em")
+                    .attr("transform", "rotate(-65)");
+
+                svg.append("g")
+                    .attr("class", "axis-y")
+                    .call(d3.axisLeft(y));
+
+                svg.select(".axis-x-label").remove();
+                svg.select(".axis-y-label").remove();
+
+                svg.append("text")
+                    .attr("class", "axis-x-label")
+                    .attr("text-anchor", "middle")
+                    .attr("x", width / 2)
+                    .attr("y", height + margin.top + 145)
+                    .text("Operator");
+
+                svg.append("text")
+                    .attr("class", "axis-y-label")
+                    .attr("text-anchor", "middle")
+                    .attr("transform", "rotate(-90)")
+                    .attr("x", -height / 2)
+                    .attr("y", -margin.left)
+                    .text("Number of Accidents");
+            }
+
+            // Initial chart rendering
+            updateChart(25, "desc");
+
+            // Event listener for number of operators input change
+            d3.select("#numOperators").on("input", function() {
+                const numOperators = +this.value;
+                const order = d3.select("#order").node().value;
+                updateChart(numOperators, order);
+            });
+            // Event listener for order input change
+            d3.select("#order").on("change", function() {
+                const numOperators = d3.select("#numOperators").node().value;
+                const order = this.value;
+                updateChart(numOperators, order);
+            });
+        });
+    </script>
+</body>
+</html>

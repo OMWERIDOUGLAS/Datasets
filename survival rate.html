@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aircraft Incidents Visualization</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .chart-container {
+            margin-top: 50px;
+        }
+
+        /* Tooltip style */
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 5px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8 chart-container">
+                <h2 class="mb-4">Aircraft Incidents Visualization</h2>
+                <!-- Dropdown menu for filtering by year -->
+                <select id="filter-select" class="form-control mb-3">
+                    <option value="all">All Years</option>
+                    <!-- Dynamically populate options with available years -->
+                </select>
+                <div id="scatter-plot"></div>
+            </div>
+            <div class="col-md-4">
+                <div class="mt-5">
+                    <h4 class="mb-3">Average Survival Rate</h4>
+                    <div id="average-survival-rate"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.1.1/d3.min.js"></script>
+    <script>
+        // Load the data
+        d3.csv("Airplane_Crashes_and_Fatalities.csv").then(function(data) {
+            // Convert data types
+            data.forEach(function(d) {
+                d.Aboard = +d.Aboard;
+                d.Fatalities = +d.Fatalities;
+                d.Date = new Date(d.Date); // Convert date string to JavaScript Date object
+            });
+
+            // Calculate survival rates for each incident
+            data.forEach(function(d) {
+                d.SurvivalRate = (d.Aboard - d.Fatalities) / d.Aboard; // Survival rate formula: (Total people aboard - Fatalities) / Total people aboard
+            });
+
+            // Extract unique years from the dataset
+            const years = [...new Set(data.map(d => d.Date.getFullYear()))];
+
+            // Populate dropdown menu options with years
+            const filterSelect = d3.select("#filter-select");
+            filterSelect.selectAll("option")
+                        .data(years)
+                        .enter()
+                        .append("option")
+                        .attr("value", year => year)
+                        .text(year => year);
+
+            // Set up dimensions for the chart
+            const margin = { top: 20, right: 20, bottom: 50, left: 50 };
+            const width = 600 - margin.left - margin.right;
+            const height = 400 - margin.top - margin.bottom;
+
+            // Create SVG container
+            const svg = d3.select("#scatter-plot")
+                          .append("svg")
+                          .attr("width", width + margin.left + margin.right)
+                          .attr("height", height + margin.top + margin.bottom)
+                          .append("g")
+                          .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            // Set up scales
+            const xScale = d3.scaleLinear()
+                             .domain([0, d3.max(data, d => d.Aboard)])
+                             .range([0, width]);
+
+            const yScale = d3.scaleLinear()
+                             .domain([0, d3.max(data, d => d.Fatalities)])
+                             .range([height, 0]);
+
+            // Create circles representing incidents
+            const circles = svg.selectAll("circle")
+                               .data(data)
+                               .enter()
+                               .append("circle")
+                               .attr("cx", d => xScale(d.Aboard))
+                               .attr("cy", d => yScale(d.Fatalities))
+                               .attr("r", 5)
+                               .attr("fill", "steelblue")
+                               .attr("opacity", 0.7);
+
+            // Add tooltip
+            const tooltip = d3.select("#scatter-plot")
+                              .append("div")
+                              .attr("class", "tooltip")
+                              .style("opacity", 0);
+
+            circles.on("mouseover", function(event, d) {
+                    tooltip.transition()
+                           .duration(200)
+                           .style("opacity", 0.9);
+                    tooltip.html("Incident Details:<br/>" + "Aboard: " + d.Aboard + "<br/>Fatalities: " + d.Fatalities)
+                           .style("left", (event.pageX + 10) + "px")
+                           .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function() {
+                    tooltip.transition()
+                           .duration(500)
+                           .style("opacity", 0);
+                });
+
+            // Add event listener for filter select
+            d3.select("#filter-select").on("change", function() {
+                const selectedYear = this.value; // Get selected year
+                if (selectedYear !== "all") {
+                    // Filter data for incidents in the selected year
+                    circles.attr("visibility", d => (d.Date.getFullYear().toString() === selectedYear) ? "visible" : "hidden");
+                } else {
+                    // Show all incidents
+                    circles.attr("visibility", "visible");
+                }
+                
+                // Update average survival rate based on the filtered data
+                updateAverageSurvivalRate(data.filter(d => selectedYear === "all" || d.Date.getFullYear().toString() === selectedYear));
+            });
+
+            // Function to update average survival rate
+            function updateAverageSurvivalRate(filteredData) {
+                const totalSurvivalRate = d3.mean(filteredData, d => d.SurvivalRate);
+                const averageContainer = d3.select("#average-survival-rate");
+                averageContainer.html(""); // Clear previous content
+                averageContainer.append("p")
+                                .text("Average Survival Rate: " + (totalSurvivalRate * 100).toFixed(2) + "%");
+            }
+
+            // Initially, display average survival rate for all incidents
+            updateAverageSurvivalRate(data);
+            
+            // Add axes
+            const xAxis = d3.axisBottom(xScale);
+            const yAxis = d3.axisLeft(yScale);
+
+            svg.append("g")
+               .attr("transform", "translate(0," + height + ")")
+               .call(xAxis);
+
+            svg.append("g")
+               .call(yAxis);
+
+            // Add labels
+            svg.append("text")
+               .attr("transform", "translate(" + (width / 2) + " ," + (height + margin.top + 20) + ")")
+               .style("text-anchor", "middle")
+               .text("Number of People Aboard");
+
+            svg.append("text")
+               .attr("transform", "rotate(-90)")
+               .attr("y", 0 - margin.left)
+               .attr("x", 0 - (height / 2))
+               .attr("dy", "1em")
+               .style("text-anchor", "middle")
+               .text("Number of Fatalities");
+        });
+    </script>
+</body>
+</html>
