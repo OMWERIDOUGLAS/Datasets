@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demographic Indicators Visualization</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* Add your custom CSS styles here */
+  </style>
+</head>
+<body>
+  <div class="container mt-4">
+    <div class="row">
+      <div class="col-md-6">
+        <h2 class="text-center">Life Expectancy Trends</h2>
+        <div class="form-group">
+          <label for="life-expectancy-select">Select Country:</label>
+          <select class="form-control" id="life-expectancy-select">
+            <!-- Options will be dynamically added here -->
+          </select>
+        </div>
+        <div id="life-expectancy-chart" class="chart-container"></div>
+      </div>
+      <div class="col-md-6">
+        <h2 class="text-center">Birth Rate Trends</h2>
+        <div class="form-group">
+          <label for="birth-rate-select">Select Country:</label>
+          <select class="form-control" id="birth-rate-select">
+            <!-- Options will be dynamically added here -->
+          </select>
+        </div>
+        <div id="birth-rate-chart" class="chart-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Load your datasets asynchronously
+    Promise.all([
+      d3.csv('countries-table.csv'),
+      d3.csv('world-data-2023.csv')
+    ]).then(([countriesData, worldData]) => {
+      // Prepare data for visualization
+      const formattedLifeExpectancyData = [];
+      const formattedBirthRateData = [];
+
+      // Group data by country
+      const groupedCountriesData = d3.group(countriesData, d => d.country);
+
+      // Populate select options and process data
+      groupedCountriesData.forEach((countryData, country) => {
+        const countryInfo = worldData.find(d => d.Country === country);
+        if (countryInfo) {
+          const lifeExpectancy = +countryInfo['Life expectancy'];
+          const year2023Population = +countryData[0]['pop2023'];
+          const year2022Population = +countryData[0]['pop2022'];
+          const birthRate = (year2023Population - year2022Population) / year2022Population * 1000;
+          formattedLifeExpectancyData.push({ country, lifeExpectancy });
+          formattedBirthRateData.push({ country, birthRate });
+
+          // Populate select options
+          d3.select('#life-expectancy-select')
+            .append('option')
+            .attr('value', country)
+            .text(country);
+
+          d3.select('#birth-rate-select')
+            .append('option')
+            .attr('value', country)
+            .text(country);
+        }
+      });
+
+      // Define chart dimensions
+      const width = 400;
+      const height = 300;
+      const margin = { top: 20, right: 30, bottom: 30, left: 40 };
+
+      // Create scales
+      const xScale = d3.scaleBand()
+        .domain(formattedLifeExpectancyData.map(d => d.country))
+        .range([margin.left, width - margin.right])
+        .padding(0.1);
+
+      const yScale = d3.scaleLinear()
+        .domain([0, d3.max(formattedLifeExpectancyData, d => d.lifeExpectancy)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+      // Create SVG for life expectancy chart
+      const lifeExpectancySVG = d3.select('#life-expectancy-chart')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+      // Draw bars for life expectancy
+      lifeExpectancySVG.selectAll('rect')
+        .data(formattedLifeExpectancyData)
+        .enter()
+        .append('rect')
+        .attr('x', d => xScale(d.country))
+        .attr('y', d => yScale(d.lifeExpectancy))
+        .attr('height', d => yScale(0) - yScale(d.lifeExpectancy))
+        .attr('width', xScale.bandwidth())
+        .attr('fill', 'steelblue');
+
+      // Add x-axis
+      lifeExpectancySVG.append('g')
+        .attr('transform', `translate(0, ${height - margin.bottom})`)
+        .call(d3.axisBottom(xScale))
+        .selectAll('text')
+        .attr('transform', 'rotate(-45)')
+        .style('text-anchor', 'end');
+
+      // Add y-axis
+      lifeExpectancySVG.append('g')
+        .attr('transform', `translate(${margin.left}, 0)`)
+        .call(d3.axisLeft(yScale));
+
+      // Add chart titles
+      lifeExpectancySVG.append('text')
+        .attr('x', width / 2)
+        .attr('y', margin.top / 2)
+        .attr('text-anchor', 'middle')
+        .text('Life Expectancy Trends');
+
+      // Event listener for life expectancy select
+      d3.select('#life-expectancy-select')
+        .on('change', function() {
+          const selectedCountry = this.value;
+          const selectedData = formattedLifeExpectancyData.find(d => d.country === selectedCountry);
+          updateLifeExpectancyChart(selectedData);
+        });
+
+      // Function to update life expectancy chart
+      function updateLifeExpectancyChart(data) {
+        lifeExpectancySVG.selectAll('rect')
+          .data([data])
+          .attr('y', d => yScale(d.lifeExpectancy))
+          .attr('height', d => yScale(0) - yScale(d.lifeExpectancy));
+      }
+
+      // Create scales for birth rate chart
+      const yScaleBirthRate = d3.scaleLinear()
+        .domain([0, d3.max(formattedBirthRateData, d => d.birthRate)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+      // Create SVG for birth rate chart
+      const birthRateSVG = d3.select('#birth-rate-chart')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+      // Draw bars for birth rate
+      birthRateSVG.selectAll('rect')
+        .data(formattedBirthRateData)
+        .enter()
+        .append('rect')
+        .attr('x', d => xScale(d.country))
+        .attr('y', d => yScaleBirthRate(d.birthRate))
+        .attr('height', d => yScaleBirthRate(0) - yScaleBirthRate(d.birthRate))
+        .attr('width', xScale.bandwidth())
+        .attr('fill', 'steelblue');
+
+      // Add x-axis
+      birthRateSVG.append('g')
+        .attr('transform', `translate(0, ${height - margin.bottom})`)
+        .call(d3.axisBottom(xScale))
+        .selectAll('text')
+        .attr('transform', 'rotate(-45)')
+        .style('text-anchor', 'end');
+
+      // Add y-axis
+      birthRateSVG.append('g')
+        .attr('transform', `translate(${margin.left}, 0)`)
+        .call(d3.axisLeft(yScaleBirthRate));
+
+      // Add chart titles
+      birthRateSVG.append('text')
+        .attr('x', width / 2)
+        .attr('y', margin.top / 2)
+        .attr('text-anchor', 'middle')
+        .text('Birth Rate Trends');
+
+      // Event listener for birth rate select
+      d3.select('#birth-rate-select')
+        .on('change', function() {
+          const selectedCountry = this.value;
+          const selectedData = formattedBirthRateData.find(d => d.country === selectedCountry);
+          updateBirthRateChart(selectedData);
+        });
+
+      // Function to update birth rate chart
+      function updateBirthRateChart(data) {
+  const height = Math.max(0, yScaleBirthRate(0) - yScaleBirthRate(data.birthRate));
+  const yPosition = data.birthRate >= 0 ? yScaleBirthRate(data.birthRate) : yScaleBirthRate(0); // Adjust y-position based on positive or negative birth rate
+  birthRateSVG.selectAll('rect')
+    .data([data])
+    .attr('y', yPosition)
+    .attr('height', height);
+}
+    }).catch(error => {
+      console.error('An error occurred while loading data:', error);
+    });
+  </script>
+</body>
+</html>
